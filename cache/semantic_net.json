@@ -1,0 +1,27 @@
+{
+    "SECTORS": {
+        "TSLA": "EV_TECH",
+        "AAPL": "CONSUMER_ELECTRONICS",
+        "NVDA": "SEMICONDUCTORS",
+        "2222.SR": "ENERGY_OIL",
+        "ARAMCO": "ENERGY_OIL",
+        "BTC-USD": "CRYPTOCURRENCY"
+    },
+    "RELATIONS": {
+        "EV_TECH": [
+            "Interest Rates",
+            "Battery Cost",
+            "AI Regulation"
+        ],
+        "ENERGY_OIL": [
+            "OPEC",
+            "Geopolitics",
+            "Global Demand"
+        ],
+        "CRYPTOCURRENCY": [
+            "SEC Regulation",
+            "Tech Sentiment",
+            "Inflation"
+        ]
+    }
+}

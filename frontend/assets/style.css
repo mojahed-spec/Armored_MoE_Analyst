@@ -1,0 +1,49 @@
+/* استيراد خط عربي جميل (Cairo) من جوجل */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+
+/* تطبيق الخط على كامل التطبيق */
+html, body, [class*="css"] {
+    font-family: 'Cairo', sans-serif;
+}
+
+/* إجبار الاتجاه من اليمين لليسار */
+.stApp {
+    direction: rtl;
+}
+
+/* تنسيق العناوين */
+h1, h2, h3 {
+    text-align: right !important;
+    color: #ffbd45 !important; /* لون ذهبي للعناوين */
+}
+
+/* تنسيق صناديق الإدخال لتكتب من اليمين */
+.stTextInput input {
+    text-align: right;
+    direction: rtl;
+}
+
+/* تنسيق صندوق التقرير المالي (الأسود والأنيق) */
+.report-box {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    padding: 25px;
+    border-radius: 12px;
+    border-right: 5px solid #00c853; /* خط أخضر جانبي */
+    margin-top: 15px;
+    margin-bottom: 15px;
+    line-height: 1.8;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* تنسيق الكروت (Metrics) */
+div[data-testid="stMetricValue"] {
+    font-size: 1.8rem !important;
+    color: #4fc3f7 !important; /* أزرق فاتح للأرقام */
+}
+
+/* تنسيق القائمة الجانبية */
+section[data-testid="stSidebar"] {
+    background-color: #111;
+    border-left: 1px solid #333;
+}
