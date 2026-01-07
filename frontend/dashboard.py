@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-
+import tempfile  # 🟢 (1) مكتبة جديدة للتعامل مع الملفات المؤقتة
 # ... (بعد الاستيرادات)
 
 def load_css(file_name):
@@ -58,6 +58,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🏦 المحلل المالي المدرع (Enterprise Edition)")
+# إضافة صندوق رفع الصور في الشريط الجانبي
+with st.sidebar:
+    st.header("📸 المحلل البصري")
+    uploaded_file = st.file_uploader("ارفع صورة لصفقة أو شارت", type=['png', 'jpg', 'jpeg'])
 st.caption("نظام هجين: تحليل أساسي + فني + مشاعر + حماية من المخاطر")
 
 # --- 2. تهيئة الذاكرة (Session State) ---
@@ -121,85 +125,89 @@ if prompt := st.chat_input("اكتب طلبك هنا..."):
     # ب) التفكير والرد
     with st.chat_message("assistant"):
         with st.spinner("جاري معالجة الطلب..."):
-            
-            # 1. تحديد النية
-            is_new_analysis, symbol = detect_intent(prompt)
             final_response = ""
+            image_path = None
 
-            # === المسار الأول: تحليل سهم جديد (تشغيل المصنع الكامل) ===
-            if is_new_analysis:
-                st.info(f"⚙️ جاري تشغيل بروتوكول التحليل للسهم: **{symbol}**...")
-                
+            # 1. المخرجات الأولية: حفظ الصورة مؤقتاً (Input Handling)
+            if uploaded_file:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    image_path = tmp_file.name
+
+            # 2. العمليات (Processing)
+            # المسار الأول: إذا وجدت صورة (الأولوية للبصر Vision Priority)
+            if image_path:
+                st.info("👁️ جاري تحليل الصورة المرفقة واستخراج بيانات الصفقة...")
                 try:
-                    # تشغيل المحرك (LangGraph)
-                    inputs = {"symbol": symbol, "user_request": "تحليل شامل", "messages": st.session_state.messages}
+                    inputs = {
+                        "messages": st.session_state.messages,
+                        "screenshot_path": image_path,
+                        "symbol": None,
+                        "user_request": prompt
+                    }
                     result = st.session_state.app.invoke(inputs)
+                    final_response = result.get('final_report', 'تم التحليل.')
                     
-                    # التحقق من البيانات
-                    if result.get('market_data') is None:
-                        final_response = f"❌ عذراً، لم أتمكن من العثور على بيانات للسهم **{symbol}**. يرجى التأكد من الرمز."
-                    else:
-                        # نجاح!
-                        report = result.get('final_report', 'تم التحليل.')
-                        df = result['market_data']
-                        
-                        # حفظ السياق
+                    # تحديث السياق وعرض الشارت إذا توفرت بيانات من الصورة
+                    if result.get('market_data') is not None:
                         st.session_state.last_context = {
-                            "symbol": symbol,
-                            "report": report,
-                            "data": df
+                            "symbol": result.get('symbol'),
+                            "report": final_response,
+                            "data": result['market_data']
                         }
-                        
-                        final_response = report
-                        
-                        # --- رسم الشارت الاحترافي (Candlestick) ---
-                        st.subheader(f"📊 الأداء الفني: {symbol}")
-                        
-                        # تجهيز البيانات للرسم
-                        df['date'] = pd.to_datetime(df['date'])
-                        
+                        # رسم الشارت (نفس كود الرسم الأصلي الخاص بك)
+                        df = result['market_data']
+                        st.subheader(f"📊 التحليل الفني للسهم المكتشف: {result.get('symbol')}")
                         fig = go.Figure(data=[go.Candlestick(
-                            x=df['date'],
-                            open=df['open'], high=df['high'],
-                            low=df['low'], close=df['close'],
-                            name=symbol
+                            x=pd.to_datetime(df['date']), open=df['open'], 
+                            high=df['high'], low=df['low'], close=df['close']
                         )])
-                        
-                        fig.update_layout(
-                            template="plotly_dark",
-                            height=500,
-                            xaxis_rangeslider_visible=False,
-                            title=f"حركة السعر التاريخية - {symbol}"
-                        )
+                        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False)
                         st.plotly_chart(fig, use_container_width=True)
 
                 except Exception as e:
-                    final_response = f"⚠️ حدث خطأ تقني أثناء التحليل: {e}"
+                    final_response = f"⚠️ خطأ في المحلل البصري: {e}"
 
-            # === المسار الثاني: دردشة متابعة (Chat) ===
+            # المسار الثاني: التحليل النصي أو الدردشة (Fallback Logic)
             else:
-                last_ctx = st.session_state.last_context
-                
-                # إعداد السياق
-                context_msg = f"""
-                سياق المحادثة الحالية:
-                السهم محل النقاش: {last_ctx['symbol']}
-                آخر تقرير صدر: {last_ctx['report']}
-                
-                سؤال المستخدم الجديد: {prompt}
-                """
-                
-                # استدعاء عقدة الدردشة
-                chat_inputs = {
-                    "messages": st.session_state.messages + [HumanMessage(content=context_msg)],
-                    "symbol": last_ctx['symbol'],
-                    "final_report": last_ctx['report']
-                }
-                
-                resp_dict = conversational_node(chat_inputs)
-                final_response = resp_dict['messages'][-1].content
+                is_new_analysis, symbol = detect_intent(prompt)
 
-            # ج) عرض وحفظ الرد النهائي
+                if is_new_analysis:
+                    st.info(f"⚙️ جاري تشغيل بروتوكول التحليل للسهم: **{symbol}**...")
+                    try:
+                        inputs = {"symbol": symbol, "user_request": "تحليل شامل", "messages": st.session_state.messages}
+                        result = st.session_state.app.invoke(inputs)
+                        
+                        if result.get('market_data') is None:
+                            final_response = f"❌ لم أتمكن من العثور على بيانات للسهم **{symbol}**."
+                        else:
+                            final_response = result.get('final_report', 'تم التحليل.')
+                            st.session_state.last_context = {"symbol": symbol, "report": final_response, "data": result['market_data']}
+                            
+                            # رسم الشارت الأصلي
+                            df = result['market_data']
+                            fig = go.Figure(data=[go.Candlestick(
+                                x=pd.to_datetime(df['date']), open=df['open'], 
+                                high=df['high'], low=df['low'], close=df['close']
+                            )])
+                            fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False)
+                            st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        final_response = f"⚠️ حدث خطأ تقني: {e}"
+
+                else:
+                    # مسار الدردشة العادية (Chat)
+                    last_ctx = st.session_state.last_context
+                    context_msg = f"سياق: {last_ctx['report']}\nسؤال: {prompt}"
+                    chat_inputs = {
+                        "messages": st.session_state.messages + [HumanMessage(content=context_msg)],
+                        "symbol": last_ctx['symbol'],
+                        "final_report": last_ctx['report']
+                    }
+                    resp_dict = conversational_node(chat_inputs)
+                    final_response = resp_dict['messages'][-1].content
+
+            # 3. المخرجات (Output Visualization)
             if "تقرير" in final_response or "التحليل" in final_response:
                 st.markdown(f'<div class="report-box">{final_response}</div>', unsafe_allow_html=True)
             else:
