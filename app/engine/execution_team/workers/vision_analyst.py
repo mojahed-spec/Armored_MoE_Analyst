@@ -17,7 +17,7 @@ def vision_node(state):
         return {"trade_ticket_data": {"error": "No image provided"}}
 
     # 1. تجهيز النموذج (نحتاج موديل قوي للصور)
-    vision_model = ChatOpenAI(model="gpt-4o", temperature=0)
+    vision_model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     # 2. تحويل الصورة
     try:
