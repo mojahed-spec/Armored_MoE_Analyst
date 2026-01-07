@@ -53,18 +53,45 @@ def vision_node(state):
         ]
     )
     
+    # التأكد من استدعاء الموديل داخل الدالة
     response = vision_model.invoke([msg])
-    
-    # 5. تنظيف النتيجة وتحويلها لـ Dict
-    # (هنا نفترض أن الموديل أرجع JSON، يمكن استخدام JsonOutputParser لضمان ذلك)
-    raw_content = response.content.replace("```json", "").replace("```", "")
-    
-    import json
-    try:
-        data = json.loads(raw_content)
-    except:
-        data = {"raw_text": raw_content}
 
-    print(f"✅ Vision: تم استخراج بيانات الصفقة {data.get('Order', 'Unknown')}")
-    
-    return {"trade_ticket_data": data}
+    # 1. فحص الرد للتأكد أنه ليس None (تجنب خطأ attribute 'strip')
+    if response is None or not hasattr(response, 'content') or not response.content:
+        print("⚠️ Vision: الرد فارغ تماماً")
+        return {
+            "final_report": "❌ فشل الاتصال بالذكاء الاصطناعي أو الصورة غير مدعومة.",
+            "is_quality_passed": True 
+        }
+
+    # 2. تنظيف النص بأمان
+    content = str(response.content).strip()
+    raw_content = content.replace("```json", "").replace("```", "").strip()
+
+    try:
+        import json
+        data = json.loads(raw_content)
+        
+        # 3. استخراج الرمز مع فحص حالة الأحرف (symbol أو Symbol)
+        extracted_symbol = data.get("Symbol") or data.get("symbol")
+        
+        if not extracted_symbol or str(extracted_symbol).lower() == "null":
+             return {
+                "final_report": f"⚠️ تم تحليل الصورة ولكن لم أجد رمز سهم واضح. الرد كان: {content}",
+                "is_quality_passed": True
+             }
+
+        # نجاح العملية وتمرير البيانات للـ Loader
+        return {
+            "trade_ticket_data": data,
+            "symbol": extracted_symbol,
+            "is_quality_passed": False # السماح للـ Loader والعمال بالعمل
+        }
+
+    except Exception as e:
+        # في حال كانت الصورة "قطة" أو أي شيء ليس JSON
+        print(f"--- فشل تحليل JSON: {e} ---")
+        return {
+            "final_report": f"🧐 هذه الصورة لا تحتوي على بيانات صفقة منظمة. وصف الذكاء الاصطناعي للصورة: {content}",
+            "is_quality_passed": True 
+        }
