@@ -4,6 +4,9 @@ from langchain_core.messages import SystemMessage
 from app.engine.state import FinancialState
 from tavily import TavilyClient
 import os
+# 🟢 استيراد العقل الاستراتيجي (المفقود سابقاً)
+from app.engine.strategy_team.chief_commander import chief_node  # المدير
+from app.engine.strategy_team.critic import critic_node # الناقد
 
 from app.engine.execution_team.workers.data_loader import DataLoader
 from app.engine.execution_team.workers.quant_analyst import quant_analyst_node
@@ -11,8 +14,6 @@ from app.engine.execution_team.workers.sentiment_analyst import sentiment_node
 from app.engine.execution_team.workers.reporter import reporter_node
 from app.engine.execution_team.workers.fundamental import fundamental_analyst_node
 from app.engine.execution_team.workers.defender import defender_node
-# 🟢 استيراد العامل الجديد (المحلل الأساسي)
-from app.engine.execution_team.workers.fundamental import fundamental_analyst_node
 
 # إعدادات النماذج
 chat_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
@@ -103,25 +104,46 @@ def loader_wrapper(state):
 # ==========================================
 # 3. بناء المخطط (The Assembly Line)
 # ==========================================
+# ==========================================
+# 4. المخطط الجديد (The New Workflow)
+# ==========================================
 def create_workflow():
     workflow = StateGraph(FinancialState)
     
     # أ) إضافة العقد (المحطات)
+    workflow.add_node("chief", chief_node)       # 🟢 جديد
+    workflow.add_node("critic", critic_node)     # 🟢 جديد
     workflow.add_node("loader", loader_wrapper)
     workflow.add_node("sentiment", sentiment_node)
-    workflow.add_node("fundamental", fundamental_analyst_node) # 🟢 المحطة الجديدة
+    workflow.add_node("fundamental", fundamental_analyst_node)
     workflow.add_node("quant", quant_analyst_node)
     workflow.add_node("reporter", reporter_node)
     
-    # ب) رسم المسار (التسلسل المنطقي)
-    # التحميل -> المشاعر -> الأساسي -> الفني -> التقرير -> النهاية
+    # ب) رسم المسار
+    workflow.set_entry_point("chief") # البداية عند المدير
     
-    workflow.set_entry_point("loader")
-    
-    workflow.add_edge("loader", "sentiment")
-    workflow.add_edge("sentiment", "fundamental") # 🟢 نمرر العمل للمحلل الأساسي
-    workflow.add_edge("fundamental", "quant")     # 🟢 ثم للمحلل الفني
+    workflow.add_edge("chief", "loader")
+    workflow.add_edge("loader", "fundamental")
+    workflow.add_edge("fundamental", "sentiment")
+    workflow.add_edge("sentiment", "quant")
     workflow.add_edge("quant", "reporter")
-    workflow.add_edge("reporter", END)
+    
+    workflow.add_edge("reporter", "critic") # التقرير يذهب للناقد
+    
+    # ج) المنطق الشرطي للناقد
+    def router_after_critic(state):
+        # ⚠️ ملاحظة: تأكد أن state.py يحتوي على is_quality_passed
+        if state.get("is_quality_passed", False):
+            return "end"
+        return "rewrite"
+
+    workflow.add_conditional_edges(
+        "critic",
+        router_after_critic,
+        {
+            "end": END,
+            "rewrite": "reporter"
+        }
+    )
     
     return workflow.compile()
