@@ -14,7 +14,7 @@ from app.engine.execution_team.workers.sentiment_analyst import sentiment_node
 from app.engine.execution_team.workers.reporter import reporter_node
 from app.engine.execution_team.workers.fundamental import fundamental_analyst_node
 from app.engine.execution_team.workers.defender import defender_node
-
+from app.engine.execution_team.workers.vision_analyst import vision_node # 🟢 استيراد جديد
 # إعدادات النماذج
 chat_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 # تأكد من وجود المفتاح في .env أو تعامل مع الخطأ بمرونة
@@ -112,6 +112,7 @@ def create_workflow():
     
     # أ) إضافة العقد (المحطات)
     workflow.add_node("chief", chief_node)       # 🟢 جديد
+    workflow.add_node("vision", vision_node) # 🟢 العقدة الجديدة
     workflow.add_node("critic", critic_node)     # 🟢 جديد
     workflow.add_node("loader", loader_wrapper)
     workflow.add_node("sentiment", sentiment_node)
@@ -129,6 +130,26 @@ def create_workflow():
     workflow.add_edge("quant", "reporter")
     
     workflow.add_edge("reporter", "critic") # التقرير يذهب للناقد
+    
+    # ---------------------------------------------------------
+    # أ) منطق البداية (Entry Point)
+    # ---------------------------------------------------------
+    workflow.set_entry_point("chief")
+
+    def route_start(state):
+        # إذا وجد المدير صورة، يرسلها للمحلل البصري، وإلا يبدأ بالتحميل العادي
+        if state.get("screenshot_path"):
+            return "vision"
+        return "loader"
+
+    workflow.add_conditional_edges(
+        "chief",
+        route_start,
+        {
+            "vision": "vision",
+            "loader": "loader"
+        }
+    )
     
     # ج) المنطق الشرطي للناقد
     def router_after_critic(state):
