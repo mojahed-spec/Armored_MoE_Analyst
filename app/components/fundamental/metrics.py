@@ -95,17 +95,91 @@ class FundamentalMetrics:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-from app.components.fundamental.metrics import FundamentalMetrics
+class FundamentalMetrics:
+    def __init__(self):
+        pass
 
-analyzer = FundamentalMetrics()
-result = analyzer.get_key_metrics("TSLA") # جرب AAPL أو 2222.SR
+    def get_key_metrics(self, symbol: str) -> Dict[str, Any]:
+        """
+        جلب المؤشرات المالية الأساسية (Fundamental Ratios)
+        لتقييم صحة الشركة وقيمتها العادلة.
+        """
+        print(f"--- 📊 Fundamental: جلب القوائم المالية لـ {symbol} ---")
+        
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            # في حال فشل الجلب أو الرمز خاطئ
+            if not info or 'regularMarketPrice' not in info:
+                # محاولة ثانية للتأكد
+                info = ticker.info
+                if not info:
+                    return {"status": "error", "message": "لم يتم العثور على بيانات مالية"}
 
-if result['status'] == 'success':
-    print(f"📊 التقرير المالي لشركة: {result['symbol']}")
-    print(f"القطاع: {result['sector']}")
-    print(f"💰 التقييم (P/E): {result['valuation']['Trailing_PE']}")
-    print(f"📈 هامش الربح: {result['profitability']['Profit_Margin']}")
-    print(f"🛡️ الديون للملكية: {result['health']['Debt_to_Equity']}")
-    print(f"📝 الخلاصة: {result['analysis_summary']}")
-else:
-    print("خطأ:", result['message'])
+            # 1. مؤشرات التقييم
+            valuation = {
+                "Current_Price": info.get('currentPrice'),
+                "Market_Cap": info.get('marketCap'),
+                "Trailing_PE": info.get('trailingPE'),
+                "Forward_PE": info.get('forwardPE'),
+                "PEG_Ratio": info.get('pegRatio'),
+                "Price_to_Book": info.get('priceToBook')
+            }
+
+            # 2. مؤشرات الربحية
+            profitability = {
+                "Profit_Margin": info.get('profitMargins'),
+                "Operating_Margin": info.get('operatingMargins'),
+                "ROE": info.get('returnOnEquity'),
+                "ROA": info.get('returnOnAssets')
+            }
+
+            # 3. الصحة المالية
+            health = {
+                "Total_Debt": info.get('totalDebt'),
+                "Debt_to_Equity": info.get('debtToEquity'),
+                "Current_Ratio": info.get('currentRatio'),
+                "Free_Cash_Flow": info.get('freeCashflow')
+            }
+
+            # 4. النمو
+            growth = {
+                "Revenue_Growth": info.get('revenueGrowth'),
+                "Earnings_Growth": info.get('earningsGrowth')
+            }
+
+            # 5. التقييم الذكي
+            score = 0
+            analysis_notes = []
+
+            if profitability['Profit_Margin'] and profitability['Profit_Margin'] > 0.15:
+                score += 1
+                analysis_notes.append("ربحية ممتازة (هامش صافي > 15%).")
+            elif profitability['Profit_Margin'] and profitability['Profit_Margin'] < 0:
+                score -= 1
+                analysis_notes.append("الشركة تحقق خسائر (هامش سالب).")
+
+            if valuation['Forward_PE'] and valuation['Forward_PE'] < 20:
+                score += 1
+                analysis_notes.append("سعر السهم يعتبر جذاباً مقارنة بالأرباح المتوقعة.")
+            
+            if health['Debt_to_Equity'] and health['Debt_to_Equity'] > 200:
+                score -= 1
+                analysis_notes.append("مخاطر عالية: الشركة مثقلة بالديون.")
+
+            return {
+                "status": "success",
+                "symbol": symbol,
+                "sector": info.get('sector', 'Unknown'),
+                "industry": info.get('industry', 'Unknown'),
+                "valuation": valuation,
+                "profitability": profitability,
+                "health": health,
+                "growth": growth,
+                "fundamental_score": score,
+                "analysis_summary": " | ".join(analysis_notes)
+            }
+
+        except Exception as e:
+            return {"status": "error", "message": str(e)}

@@ -7,6 +7,7 @@ from app.core.config import settings
 # مسار الذاكرة الدلالية (التي أنشأها المصنع)
 SEMANTIC_CACHE_PATH = "cache/semantic_net.json"
 
+
 class ChiefCommander:
     def __init__(self):
         self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY, temperature=0)
@@ -68,7 +69,7 @@ class ChiefCommander:
 
 commander = ChiefCommander()
 
-def chief_commander_node(state):
+def chief_node(state):
     print("--- 👔 Strategy Team: وضع خطة التحليل ---")
     
     symbol = state.get('symbol')

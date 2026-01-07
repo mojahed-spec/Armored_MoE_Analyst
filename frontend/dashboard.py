@@ -6,8 +6,6 @@ import plotly.graph_objects as go
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 import tempfile  # 🟢 (1) مكتبة جديدة للتعامل مع الملفات المؤقتة
-# ... (بعد الاستيرادات)
-
 def load_css(file_name):
     """دالة لقراءة ملف CSS وتطبيقه"""
     with open(file_name) as f:
@@ -70,9 +68,8 @@ if "messages" not in st.session_state:
         AIMessage(content="مرحباً بك. أنا جاهز للعمل. اطلب تحليل شركة (مثال: **أرامكو** أو **AAPL**) وسأقوم بتشغيل الفريق الكامل.")
     ]
 
-# تخزين المحرك لتسريع الأداء
-if "app" not in st.session_state:
-    st.session_state.app = create_workflow()
+if "last_context" not in st.session_state:
+    st.session_state.last_context = {"symbol": None, "report": "لا يوجد تحليل سابق.", "data": None}
 
 # تخزين آخر سياق (لتغذية المحادثة اللاحقة)
 if "last_context" not in st.session_state:
