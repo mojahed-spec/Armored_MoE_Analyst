@@ -111,34 +111,29 @@ def loader_wrapper(state):
     return {"market_data": df}
 
 # ==========================================
-# 3. بناء المخطط (Main Workflow)
+# 3. بناء المخطط (Main Workflow) - النسخة المصححة
 # ==========================================
 def create_workflow():
     workflow = StateGraph(FinancialState)
     
-    # ---------------------------------------------------------
-    # أ) إضافة العقد (Nodes)
-    # ---------------------------------------------------------
-    workflow.add_node("chief", chief_node)           # المدير
-    workflow.add_node("vision", vision_node)         # المحلل البصري
-    workflow.add_node("loader", loader_wrapper)      # التحميل
-    workflow.add_node("defender", defender_node)     # 🛡️ المدافع (تم تفعيله)
+    # أ) إضافة العقد
+    workflow.add_node("chief", chief_node)
+    workflow.add_node("vision", vision_node)
+    workflow.add_node("loader", loader_wrapper)
+    workflow.add_node("defender", defender_node)
     workflow.add_node("fundamental", fundamental_analyst_node)
     workflow.add_node("sentiment", sentiment_node)
     workflow.add_node("quant", quant_analyst_node)
     workflow.add_node("reporter", reporter_node)
-    workflow.add_node("critic", critic_node)         # الناقد
+    workflow.add_node("critic", critic_node)
 
-    # ---------------------------------------------------------
-    # ب) نقطة البداية والقرار الأول (Chief Logic)
-    # ---------------------------------------------------------
+    # ب) نقطة البداية
     workflow.set_entry_point("chief")
 
+    # منطق البداية (إما صورة أو تحميل)
     def route_start(state):
-        # 1. إذا وجد المدير صورة، نذهب للمحلل البصري
         if state.get("screenshot_path"):
             return "vision"
-        # 2. وإلا نذهب للتحميل المباشر
         return "loader"
 
     workflow.add_conditional_edges(
@@ -150,35 +145,40 @@ def create_workflow():
         }
     )
     
-    # ---------------------------------------------------------
-    # ج) ربط المسار التسلسلي (The Pipeline)
-    # ---------------------------------------------------------
+    # =========================================================
+    # 🟢 التعديل الجديد: إشارة مرور بعد المحلل البصري
+    # =========================================================
+    def route_after_vision(state):
+        # التحقق: هل نجحنا في استخراج رمز السهم؟
+        symbol = state.get('symbol')
+        # نتأكد أنه ليس فارغاً وليس النص "None"
+        if symbol and str(symbol).lower() != "none":
+            return "continue" # نعم، أكمل للتحميل
+        return "stop" # لا، توقف هنا
+
+    workflow.add_conditional_edges(
+        "vision",
+        route_after_vision,
+        {
+            "continue": "loader", # الطريق السالك
+            "stop": END           # طريق مسدود (إنهاء)
+        }
+    )
+    # =========================================================
     
-    # 1. من الرؤية إلى التحميل (لإكمال البيانات الناقصة)
-    workflow.add_edge("vision", "loader")
-    
-    # 2. من التحميل إلى الدفاع (Sanitization)
+    # إكمال بقية المسار
     workflow.add_edge("loader", "defender")
-    
-    # 3. من الدفاع إلى التحليل الأساسي
     workflow.add_edge("defender", "fundamental")
-    
-    # 4. بقية العمال بالتسلسل
     workflow.add_edge("fundamental", "sentiment")
     workflow.add_edge("sentiment", "quant")
     workflow.add_edge("quant", "reporter")
-    
-    # 5. التسليم للناقد
     workflow.add_edge("reporter", "critic")
     
-    # ---------------------------------------------------------
-    # د) حلقة الجودة (Critic Logic)
-    # ---------------------------------------------------------
+    # منطق الناقد
     def router_after_critic(state):
-        # إذا وافق الناقد (أو تجاوزنا عدد المحاولات) ننهي
         if state.get("is_quality_passed", False):
             return "end"
-        return "rewrite" # وإلا نعيد للصحفي
+        return "rewrite"
 
     workflow.add_conditional_edges(
         "critic",

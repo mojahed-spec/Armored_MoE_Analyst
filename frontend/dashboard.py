@@ -71,9 +71,8 @@ if "messages" not in st.session_state:
 if "last_context" not in st.session_state:
     st.session_state.last_context = {"symbol": None, "report": "لا يوجد تحليل سابق.", "data": None}
 
-# تخزين آخر سياق (لتغذية المحادثة اللاحقة)
-if "last_context" not in st.session_state:
-    st.session_state.last_context = {"symbol": None, "report": "لا يوجد تحليل سابق.", "data": None}
+if "app" not in st.session_state:
+    st.session_state.app = create_workflow()
 
 # --- 3. نموذج استخراج النية (Intent Extraction) ---
 extractor_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
