@@ -10,12 +10,24 @@ class DataLoader:
     def fetch_and_store_data(self, symbol: str, period: str = "2y"):
         """
         يجلب البيانات من الإنترنت ويخزنها في المستودع المحلي.
-        
-        Args:
-            symbol: رمز السهم (مثلاً AAPL)
-            period: المدة الزمنية (2y = سنتين، 1y = سنة، 1mo = شهر)
         """
+        # تنظيف الرمز الأساسي
         clean_symbol = symbol.strip().upper()
+        
+        # 🟢 بداية التعديل: إصلاح الرموز الخاصة (Mapping Fix)
+        # Yahoo Finance يستخدم رموزاً خاصة للذهب والعملات، نحولها هنا
+        original_symbol = clean_symbol # نحتفظ بالاسم الأصلي للطباعة
+        
+        if clean_symbol == "XAUUSD" or clean_symbol == "GOLD":
+            clean_symbol = "GC=F" # العقود الآجلة للذهب
+            print(f"   >> 🔄 تم تحويل الرمز {original_symbol} إلى {clean_symbol} ليتوافق مع Yahoo Finance.")
+        elif clean_symbol == "EURUSD":
+            clean_symbol = "EURUSD=X"
+        elif clean_symbol == "GBPUSD":
+            clean_symbol = "GBPUSD=X"
+        elif clean_symbol == "BTC":
+            clean_symbol = "BTC-USD"
+            
         print(f"--- 📥 Loader: جاري الاتصال بالسوق لجلب بيانات {clean_symbol} ---")
         
         try:
@@ -23,7 +35,7 @@ class DataLoader:
             ticker = yf.Ticker(clean_symbol)
             df = ticker.history(period=period)
             
-            # محاولة ثانية إذا فشل الجلب (أحياناً يفشل الاتصال الأول)
+            # محاولة ثانية إذا فشل الجلب
             if df.empty:
                 print("   >> ⚠️ محاولة ثانية بمدى زمني أقصر (1 سنة)...")
                 df = ticker.history(period="1y")
@@ -32,32 +44,30 @@ class DataLoader:
                 return False, f"فشل تحميل البيانات للرمز {clean_symbol}. تأكد من صحة الرمز."
 
             # 2. تنظيف وتنسيق البيانات
-            # نحتاج تحويل المؤشر (التاريخ) إلى عمود عادي
             df.reset_index(inplace=True)
-            
-            # التأكد من صيغة التاريخ (بدون توقيت زمني)
             df['Date'] = df['Date'].dt.date
             
-            # اختيار الأعمدة المطلوبة فقط وإعادة تسميتها لتطابق قاعدة البيانات
-            # الجدول في DuckDB يتوقع: symbol, date, open, high, low, close, volume
+            # تنسيق الأعمدة لقاعدة البيانات
             df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
             df.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
-            df['symbol'] = clean_symbol # إضافة عمود الرمز
+            
+            # ⚠️ ملاحظة هامة: نخزن البيانات باسم الرمز الأصلي (مثل XAUUSD)
+            # لكي يجده باقي الفريق (المحلل الفني والكمي) بنفس الاسم الذي يعرفونه
+            df['symbol'] = original_symbol 
             
             # 3. التخزين في DuckDB
-            # استراتيجية التحديث: نحذف البيانات القديمة لهذا السهم ونضع الجديدة (لضمان التحديث)
-            self.conn.execute(f"DELETE FROM stock_prices WHERE symbol = '{clean_symbol}'")
+            # نحذف البيانات القديمة لنفس الرمز (الأصلي)
+            self.conn.execute(f"DELETE FROM stock_prices WHERE symbol = '{original_symbol}'")
             
-            # خدعة DuckDB الرائعة: إدخال DataFrame مباشرة باستخدام SQL
             self.conn.register('temp_df', df)
             self.conn.execute("""
                 INSERT INTO stock_prices 
                 (symbol, date, open, high, low, close, volume)
                 SELECT symbol, date, open, high, low, close, volume FROM temp_df
             """)
-            self.conn.unregister('temp_df') # تنظيف الذاكرة المؤقتة
+            self.conn.unregister('temp_df')
             
-            msg = f"تم بنجاح تحميل وتخزين {len(df)} يوم تداول لـ {clean_symbol}."
+            msg = f"تم بنجاح تحميل وتخزين {len(df)} يوم تداول لـ {original_symbol}."
             print(f"   ✅ {msg}")
             return True, msg
 
@@ -68,8 +78,7 @@ class DataLoader:
 
     def get_data(self, symbol: str) -> pd.DataFrame:
         """
-        وظيفة القراءة: يستخدمها باقي العمال (Defender, Quant) 
-        للحصول على البيانات من المستودع المحلي بسرعة فائقة.
+        وظيفة القراءة: يستخدمها باقي العمال
         """
         clean_symbol = symbol.strip().upper()
         try:
@@ -77,4 +86,4 @@ class DataLoader:
             return self.conn.execute(query).df()
         except Exception as e:
             print(f"⚠️ خطأ في قراءة البيانات: {e}")
-            return pd.DataFrame() # إرجاع جدول فارغ في حال الخطأ
+            return pd.DataFrame()
